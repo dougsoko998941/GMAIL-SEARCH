@@ -86,7 +86,7 @@ async function extractWithAI(candidates) {
       `- Salon, repair, home service, or other service bookings -> type "Service"\n` +
       `- Flights, hotels, trains, car rentals -> type "Travel"\n` +
       `- School events, parent-teacher conferences -> type "School"\n` +
-      `- Sporting events: games, matches, tournaments (football, soccer, basketball, baseball, etc.), tickets to a game -> type "Sports"\n\n` +
+      `- Sports: confirmed team practices, games, matches, tournaments, and tickets to a game. Include a practice or season schedule only when it gives a concrete future date, time, and location for the recipient's team -> type "Sports"\n\n` +
       `STRICTLY EXCLUDE (do not return these at all):\n` +
       `- Marketing, promotions, newsletters, sales, discounts, "book now" ads\n` +
       `- Concert, music, festival, or venue advertisements/announcements, including Spotify concert emails, unless the recipient has a confirmed ticket or reservation\n` +
