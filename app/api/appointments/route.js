@@ -41,6 +41,13 @@ function today() {
   return new Date(n.getFullYear(), n.getMonth(), n.getDate()).toISOString().slice(0, 10)
 }
 
+function isPromotionalEventEmail(subject, sender, body) {
+  const text = `${subject} ${sender} ${body}`.toLowerCase()
+  const promotionSignals = /\b(newsletter|unsubscribe|presale|pre-sale|on sale|tickets? on sale|buy tickets?|limited time|sale ends|promo code|save \d|special offer|advertisement|sponsored|festival lineup|lineup announced|just announced|discover events|book now)\b/
+  const bookingSignals = /\b(booking confirmation|reservation confirmation|reservation number|confirmation number|order confirmation|ticket confirmation|your tickets?|ticket order|you(?:'|’)re going|admission ticket|seat(?:s)?\s+(?:is|are)|check[- ]?in)\b/
+  return promotionSignals.test(text) && !bookingSignals.test(text)
+}
+
 const extractionSchema = z.object({
   appointments: z.array(
     z.object({
@@ -79,9 +86,10 @@ async function extractWithAI(candidates) {
       `- Salon, repair, home service, or other service bookings -> type "Service"\n` +
       `- Flights, hotels, trains, car rentals -> type "Travel"\n` +
       `- School events, parent-teacher conferences -> type "School"\n` +
-      `- Sporting events: games, matches, tournaments (football, soccer, basketball, baseball, etc.), tickets to a game -> type "Sports"\n\n` +
+      `- Sports: confirmed team practices, games, matches, tournaments, and tickets to a game. Include a practice or season schedule only when it gives a concrete future date, time, and location for the recipient's team -> type "Sports"\n\n` +
       `STRICTLY EXCLUDE (do not return these at all):\n` +
       `- Marketing, promotions, newsletters, sales, discounts, "book now" ads\n` +
+      `- Concert, music, festival, or venue advertisements/announcements, including Spotify concert emails, unless the recipient has a confirmed ticket or reservation\n` +
       `- Restaurant/venue promotional emails that are NOT an actual confirmed reservation\n` +
       `- Order receipts, shipping/delivery notifications, payment receipts\n` +
       `- Password resets, security alerts, account notices, social notifications\n` +
@@ -303,7 +311,8 @@ export async function GET(request) {
         .replace(/<[^>]+>/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
-      candidates.push({ index: i, id: row.id, subject, sender, body })
+      if (isPromotionalEventEmail(subject, sender, body)) continue
+      candidates.push({ index: candidates.length, id: row.id, subject, sender, body })
     }
 
     const extracted = await extractWithAI(candidates)
