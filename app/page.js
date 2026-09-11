@@ -268,6 +268,7 @@ export default function Home() {
           </ol>
         </div>}
         <div className="small">You can add this page to your iPhone Home Screen from Safari.</div>
+        <div className="small">We request read-only Gmail access only to find appointments. <a href="/privacy">Privacy Policy</a></div>
       </section>}
 
       {signedIn && error && <section className="connectCard">
