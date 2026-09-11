@@ -37,6 +37,17 @@ export default function Home() {
   const [scanNote, setScanNote] = useState('');
   const [editing, setEditing] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [recipients, setRecipients] = useState([]);
+  const [reminding, setReminding] = useState(null);
+  const [recipientName, setRecipientName] = useState('');
+  const [recipientPhone, setRecipientPhone] = useState('');
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem('reminder-recipients') || '[]');
+      if (Array.isArray(saved)) setRecipients(saved.filter((r) => r?.name && r?.phone));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -163,6 +174,25 @@ export default function Home() {
     }
   }
 
+  function saveRecipient(e) {
+    e.preventDefault();
+    const phone = recipientPhone.replace(/[^+\d]/g, '');
+    if (!recipientName.trim() || !phone) return;
+    const next = [...recipients, { id: `${Date.now()}-${phone}`, name: recipientName.trim(), phone }];
+    setRecipients(next);
+    window.localStorage.setItem('reminder-recipients', JSON.stringify(next));
+    setRecipientName('');
+    setRecipientPhone('');
+  }
+
+  function openTextReminder(recipient) {
+    if (!reminding) return;
+    const details = [reminding.date, reminding.time, reminding.location].filter(Boolean).join(' at ');
+    const message = `Reminder: ${reminding.title}${details ? ` — ${details}` : ''}.`;
+    window.location.href = `sms:${recipient.phone}?&body=${encodeURIComponent(message)}`;
+    setReminding(null);
+  }
+
   async function deleteAppt(id) {
     if (!confirm('Delete this appointment?')) return;
     setBusyId(id);
@@ -256,12 +286,27 @@ export default function Home() {
             <div className="row2"><span className={`pill pill-${(a.type || 'Appointment').toLowerCase()}`}>{a.type || 'Appointment'}</span><span className="source">{a.sender}</span></div>
           </div>
           {!showDemo && <div className="cardActions">
+            <button aria-label="Text reminder" onClick={()=>setReminding(a)}>SMS</button>
             <button aria-label="Edit appointment" onClick={()=>setEditing({ id:a.id, title:a.title, date:a.date, time:a.time||'', location:a.location||'', type:a.type||'Appointment' })} disabled={busyId===a.id}>✎</button>
             <button aria-label="Delete appointment" className="danger" onClick={()=>deleteAppt(a.id)} disabled={busyId===a.id}>✕</button>
           </div>}
         </article>)}
         {!shown.length && status==='ready' && <div className="empty">No upcoming appointments found.</div>}
       </section>
+
+      {reminding && <div className="modalOverlay" onClick={()=>setReminding(null)}>
+        <div className="modal" onClick={(e)=>e.stopPropagation()}>
+          <h2>Text reminder</h2>
+          <p className="muted">Choose a recipient. Messages opens with a prefilled reminder; you review and send it.</p>
+          {recipients.map((recipient) => <button className="primary compact" key={recipient.id} onClick={()=>openTextReminder(recipient)}>{recipient.name}</button>)}
+          <form onSubmit={saveRecipient}>
+            <label>Name<input value={recipientName} onChange={(e)=>setRecipientName(e.target.value)} placeholder="Recipient name" required /></label>
+            <label>Mobile number<input type="tel" value={recipientPhone} onChange={(e)=>setRecipientPhone(e.target.value)} placeholder="+1 555 555 5555" required /></label>
+            <button type="submit" className="primary">Add recipient</button>
+          </form>
+          <button className="ghost" onClick={()=>setReminding(null)}>Cancel</button>
+        </div>
+      </div>}
 
       {editing && <div className="modalOverlay" onClick={()=>setEditing(null)}>
         <form className="modal" onClick={(e)=>e.stopPropagation()} onSubmit={saveEdit}>
