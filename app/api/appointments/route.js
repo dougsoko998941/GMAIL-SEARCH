@@ -312,27 +312,37 @@ export async function GET(request) {
     return Response.json({ error: 'no_gmail_token' }, { status: 403 })
   }
 
-  // Broad search — the AI does the real filtering, so we only need a wide net.
-  // Explicitly include restaurant-reservation senders (Resy, OpenTable) and
-  // common appointment keywords so real bookings aren't excluded up front.
-  // Note: `from:me` pulls in personal notes the user emails to themselves
-  // (e.g. "Charlie - Bus Arrival, 3:40pm Friday 9/11") which carry no
-  // appointment keywords — the AI + confidence floor sort out what's real.
-  const q =
+  // Two separate searches so neither crowds the other out of the processing
+  // cap. `selfQuery` captures personal notes the user emails to themselves
+  // (e.g. "MMS Back-to-School Night, 6pm Wednesday 9/16") which carry no
+  // appointment keywords; `keywordQuery` captures normal confirmations and
+  // reservation senders. The AI + confidence floor sort out what's real.
+  const keywordQuery =
     'newer_than:120d (' +
     'appointment OR confirmed OR confirmation OR reservation OR reserved OR scheduled OR ' +
     'booking OR booked OR "your table" OR dentist OR doctor OR clinic OR flight OR hotel OR ' +
     'check-in OR upcoming OR reminder OR ' +
-    'from:resy.com OR from:opentable.com OR from:resy OR from:opentable OR ' +
-    'from:me' +
+    'from:resy.com OR from:opentable.com OR from:resy OR from:opentable' +
     ')'
+  const selfQuery = 'newer_than:120d from:me'
 
   try {
-    const list = await gmailFetch(`/messages?q=${encodeURIComponent(q)}&maxResults=60`, token)
-    const ids = list.messages || []
+    // Fetch both result sets and merge, keeping self-notes first so a recent
+    // personal note is never displaced by higher-volume keyword mail.
+    const [selfList, keywordList] = await Promise.all([
+      gmailFetch(`/messages?q=${encodeURIComponent(selfQuery)}&maxResults=25`, token),
+      gmailFetch(`/messages?q=${encodeURIComponent(keywordQuery)}&maxResults=50`, token),
+    ])
+    const seen = new Set()
+    const ids = []
+    for (const row of [...(selfList.messages || []), ...(keywordList.messages || [])]) {
+      if (seen.has(row.id)) continue
+      seen.add(row.id)
+      ids.push(row)
+    }
     const candidates = []
 
-    for (const [i, row] of ids.slice(0, 40).entries()) {
+    for (const [i, row] of ids.slice(0, 50).entries()) {
       const msg = await gmailFetch(`/messages/${row.id}?format=full`, token)
       const p = msg.payload || {}
       const subject = header(p.headers, 'Subject')
