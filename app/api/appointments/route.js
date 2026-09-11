@@ -71,24 +71,25 @@ async function extractWithAI(candidates) {
     model: MODEL,
     schema: extractionSchema,
     system:
-      `You extract CONFIRMED, scheduled appointments and reservations that the recipient personally has. ` +
+      `You extract scheduled appointments, reservations, and events the recipient personally has. ` +
       `Today's date is ${today()}. Resolve relative dates ("tomorrow", "next Tuesday", "this Friday at 3pm") against today.\n\n` +
-      `INCLUDE only emails that confirm a specific personal booking with a concrete calendar date, such as:\n` +
+      `INCLUDE any email that describes a specific personal event with a concrete calendar date. This includes ` +
+      `formal business confirmations AND informal notes the person wrote or forwarded to themselves (e.g. a "me to me" ` +
+      `note listing a restaurant, date, time, and party size). If a place/event, a date, and a time are present, INCLUDE it. Categories:\n` +
       `- Medical/dental/vet appointments (dentist, doctor, clinic) -> type "Medical"\n` +
-      `- Restaurant reservations, including Resy and OpenTable confirmations -> type "Dining"\n` +
+      `- Restaurant reservations and dinner plans, including Resy/OpenTable and self-written notes -> type "Dining"\n` +
       `- Salon, repair, home service, or other service bookings -> type "Service"\n` +
       `- Flights, hotels, trains, car rentals -> type "Travel"\n` +
       `- School events, parent-teacher conferences -> type "School"\n` +
       `- Sporting events: games, matches, tournaments (football, soccer, basketball, baseball, etc.), tickets to a game -> type "Sports"\n\n` +
-      `STRICTLY EXCLUDE (do not return these at all):\n` +
+      `EXCLUDE (do not return these):\n` +
       `- Marketing, promotions, newsletters, sales, discounts, "book now" ads\n` +
-      `- Restaurant/venue promotional emails that are NOT an actual confirmed reservation\n` +
+      `- Restaurant/venue promotional blasts with no specific personal booking or date\n` +
       `- Order receipts, shipping/delivery notifications, payment receipts\n` +
       `- Password resets, security alerts, account notices, social notifications\n` +
-      `- Generic "let's schedule a meeting" emails with no concrete confirmed date\n\n` +
-      `For Resy/OpenTable: only include when it is an actual reservation CONFIRMATION for a specific date and party, not a "your table is waiting" or "discover restaurants" marketing blast.\n` +
+      `- Vague "let's find a time" emails with no concrete date\n\n` +
       `Return the date as YYYY-MM-DD. If you cannot determine a concrete future date, omit that email entirely. ` +
-      `Set confidence 0-100: use 80+ only for clear confirmations, and below 60 if you are unsure it is a genuine personal booking.`,
+      `Set confidence 0-100 based on how clearly the email describes a real dated event: use 85+ when a place, date, and time are all clearly stated (even in an informal note), 60-84 when some details are implied, and below 50 only when it is likely not a real personal event.`,
     prompt: `Extract appointments from these emails:\n\n${emailBlocks}`,
   })
 
@@ -315,7 +316,7 @@ export async function GET(request) {
       if (!src) continue
       if (!/^\d{4}-\d{2}-\d{2}$/.test(a.date) || a.date < cutoff) continue
       // Drop low-confidence guesses to keep marketing/ambiguous emails out.
-      if ((a.confidence ?? 0) < 60) continue
+      if ((a.confidence ?? 0) < 50) continue
       items.push({
         id: src.id,
         title: a.title || src.subject || 'Upcoming appointment',
