@@ -155,6 +155,32 @@ export async function POST(request) {
   } catch {
     return Response.json({ error: 'invalid_body' }, { status: 400 })
   }
+
+  // Manually add an appointment or task entered by the user.
+  if (body?.action === 'add') {
+    const { title, date, time, location, type } = body
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return Response.json({ error: 'invalid_date' }, { status: 400 })
+    }
+    const row = {
+      user_id: session.user.id,
+      gmail_id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title: (title || '').trim() || 'Untitled',
+      appt_date: date,
+      appt_time: time || null,
+      location: location || null,
+      sender: 'Added manually',
+      type: type || 'Appointment',
+      confidence: 100,
+    }
+    const { error } = await supabase.from('appointments').insert(row)
+    if (error) {
+      console.log('[v0] manual add error:', error.message)
+      return Response.json({ error: 'db_failed' }, { status: 500 })
+    }
+    return Response.json({ items: await readStored(supabase, session.user.id) })
+  }
+
   const refreshToken = body?.refresh_token
   if (!refreshToken) return Response.json({ ok: true })
 
@@ -289,12 +315,16 @@ export async function GET(request) {
   // Broad search — the AI does the real filtering, so we only need a wide net.
   // Explicitly include restaurant-reservation senders (Resy, OpenTable) and
   // common appointment keywords so real bookings aren't excluded up front.
+  // Note: `from:me` pulls in personal notes the user emails to themselves
+  // (e.g. "Charlie - Bus Arrival, 3:40pm Friday 9/11") which carry no
+  // appointment keywords — the AI + confidence floor sort out what's real.
   const q =
     'newer_than:120d (' +
     'appointment OR confirmed OR confirmation OR reservation OR reserved OR scheduled OR ' +
     'booking OR booked OR "your table" OR dentist OR doctor OR clinic OR flight OR hotel OR ' +
     'check-in OR upcoming OR reminder OR ' +
-    'from:resy.com OR from:opentable.com OR from:resy OR from:opentable' +
+    'from:resy.com OR from:opentable.com OR from:resy OR from:opentable OR ' +
+    'from:me' +
     ')'
 
   try {

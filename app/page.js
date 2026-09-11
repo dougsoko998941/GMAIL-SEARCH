@@ -36,6 +36,7 @@ export default function Home() {
   const [setupNeeded, setSetupNeeded] = useState(false);
   const [scanNote, setScanNote] = useState('');
   const [editing, setEditing] = useState(null);
+  const [adding, setAdding] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [recipients, setRecipients] = useState([]);
   const [reminding, setReminding] = useState(null);
@@ -208,6 +209,27 @@ export default function Home() {
     }
   }
 
+  async function addAppt(e) {
+    e.preventDefault();
+    setBusyId('add');
+    try {
+      const r = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add', ...adding }),
+      });
+      if (!r.ok) throw new Error('add_failed');
+      const data = await r.json();
+      setItems(data.items || []);
+      setShowDemo(false);
+      setAdding(null);
+    } catch {
+      setError('Could not add that appointment.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function saveEdit(e) {
     e.preventDefault();
     const form = editing;
@@ -240,7 +262,10 @@ export default function Home() {
           <h1>Upcoming</h1>
           <div className="muted">{today}</div>
         </div>
-        <button className="round" onClick={signedIn ? scan : connectGmail} aria-label="Scan inbox">↻</button>
+        <div className="topActions">
+          {signedIn && <button className="round" onClick={()=>setAdding({ title:'', date:'', time:'', location:'', type:'Appointment' })} aria-label="Add appointment">+</button>}
+          <button className="round" onClick={signedIn ? scan : connectGmail} aria-label="Scan inbox">↻</button>
+        </div>
       </header>
 
       <section className="summary">
@@ -306,6 +331,25 @@ export default function Home() {
           </form>
           <button className="ghost" onClick={()=>setReminding(null)}>Cancel</button>
         </div>
+      </div>}
+
+      {adding && <div className="modalOverlay" onClick={()=>setAdding(null)}>
+        <form className="modal" onClick={(e)=>e.stopPropagation()} onSubmit={addAppt}>
+          <h2>Add appointment</h2>
+          <label>Title<input value={adding.title} onChange={(e)=>setAdding({...adding, title:e.target.value})} placeholder="e.g. Charlie - Bus Arrival" required /></label>
+          <label>Date<input type="date" value={adding.date} onChange={(e)=>setAdding({...adding, date:e.target.value})} required /></label>
+          <label>Time<input value={adding.time} onChange={(e)=>setAdding({...adding, time:e.target.value})} placeholder="e.g. 3:40 PM" /></label>
+          <label>Location<input value={adding.location} onChange={(e)=>setAdding({...adding, location:e.target.value})} placeholder="e.g. Darien, CT" /></label>
+          <label>Type
+            <select value={adding.type} onChange={(e)=>setAdding({...adding, type:e.target.value})}>
+              {['Medical','Dining','School','Sports','Service','Travel','Appointment'].map(t=><option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <div className="modalActions">
+            <button type="button" className="ghost" onClick={()=>setAdding(null)}>Cancel</button>
+            <button type="submit" className="primary compact" disabled={busyId==='add'}>{busyId==='add' ? 'Adding…' : 'Add'}</button>
+          </div>
+        </form>
       </div>}
 
       {editing && <div className="modalOverlay" onClick={()=>setEditing(null)}>
